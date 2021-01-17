@@ -1,6 +1,6 @@
-'''
+"""
 An F# Fable (python) kernel for Jupyter based on MetaKernel.
-'''
+"""
 import os
 import re
 import sys
@@ -15,13 +15,15 @@ from .version import __version__
 
 
 def create_fallback_completer(env):
-    '''
+    """
     Return simple completions from env listing,
     macros and compile table
-    '''
+    """
+
     def complete(txt):
         matches = []
         return matches
+
     return complete
 
 
@@ -29,25 +31,24 @@ class Fable(MetaKernel):
     """
     A Jupyter kernel for F# based on MetaKernel.
     """
-    implementation = 'Fable'
+
+    implementation = "Fable"
     implementation_version = __version__
-    language = 'fs'
+    language = "fs"
     language_version = "0.1"
-    banner = 'Fable is a compiler designed to make F# a first-class citizen of the Python ecosystem'
+    banner = "Fable is a compiler designed to make F# a first-class citizen of the Python ecosystem"
     language_info = {
-        'name': 'fsharp',
-        'mimetype': 'text/x-fsharp',
-        'pygments_lexer': 'fsharp',
-        'file_extension': '.fs'
+        "name": "fsharp",
+        "mimetype": "text/x-fsharp",
+        "pygments_lexer": "fsharp",
+        "file_extension": ".fs",
     }
     kernel_json = {
-        "argv": [sys.executable,
-                 "-m", "fable",
-                 "-f", "{connection_file}"],
+        "argv": [sys.executable, "-m", "fable", "-f", "{connection_file}"],
         "display_name": "F# (Fable.py)",
         "language": "fsharp",
         "codemirror_mode": "fsharp",
-        "name": "fable-python"
+        "name": "fable-python",
     }
 
     # For splitting code blocks into statements
@@ -57,24 +58,24 @@ class Fable(MetaKernel):
     pyfile = "fable.py"
     fsfile = "Fable.fs"
 
-    magic_prefixes = dict(magic='%', shell='!', help='?')
+    magic_prefixes = dict(magic="%", shell="!", help="?")
     help_suffix = None
 
     def __init__(self, *args, **kwargs):
-        '''
-        Create the Fable environment
-        '''
+        """
+        Create the Fable (Python) environment
+        """
         self.env = {}
         super(Fable, self).__init__(*args, **kwargs)
 
         # self.complete = create_completer(self.env)
         self.locals = {"__name__": "__console__", "__doc__": None}
-        module_name = self.locals.get('__name__', '__console__')
+        module_name = self.locals.get("__name__", "__console__")
         self.module = sys.modules.setdefault(module_name, types.ModuleType(module_name))
         self.module.__dict__.update(self.locals)
         self.locals = self.module.__dict__
 
-        self.program = OrderedDict(dict(module="module fable"))
+        self.program = OrderedDict(dict(module="module Fable.Jupyter"))
 
     def set_variable(self, var, value):
         self.env[var] = value
@@ -135,12 +136,14 @@ class Fable(MetaKernel):
 
         except Exception as e:
             self.Error(traceback.format_exc())
-            self.kernel_resp.update({
-                "status": "error",
-                'ename': e.__class__.__name__,   # Exception name, as a string
-                'evalue': e.__class__.__name__,  # Exception value, as a string
-                'traceback': [],  # traceback frames as strings
-            })
+            self.kernel_resp.update(
+                {
+                    "status": "error",
+                    "ename": e.__class__.__name__,  # Exception name, as a string
+                    "evalue": e.__class__.__name__,  # Exception value, as a string
+                    "traceback": [],  # traceback frames as strings
+                }
+            )
             return None
         return self.result
 
