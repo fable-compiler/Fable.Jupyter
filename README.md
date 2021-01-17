@@ -1,14 +1,14 @@
 
 # Fable (Python)
 
-Fable Python is an F# kernel for Jupyter based on [Metakernel](https://github.com/Calysto/metakernel). [Fable](https://fable.io) is a
-transpiler that converts [F#](https://fsharp.org) to Python (and JavaScript)
+Fable Python is an F# kernel for Jupyter based on [Fable](https://fable.io) and
+[Metakernel](https://github.com/Calysto/metakernel). Fable is a transpiler that converts [F#](https://fsharp.org) to
+Python (and JavaScript).
 
 ## Install
 
 ```shell
-pip3 install git+https://github.com/ekaschalk/jedhy.git
-pip3 install git+https://github.com/Calysto/calysto_hy.git
+pip3 install git+https://github.com/dbrattli/Fable.Jupyter.git
 python3 -m fable install
 ```
 
