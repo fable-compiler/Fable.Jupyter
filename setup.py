@@ -23,7 +23,7 @@ setup(name='fable',
           "https://github.com/cognitedata/expression"
       ],
       packages=find_packages(include=["fable", "fable.*"]),
-      package_data={'fable': ["images/*.png", "modules/*.ss"]},
+      package_data={'fable_py': ["images/*.png", "modules/*.ss"]},
       classifiers=[
           'Framework :: IPython',
           'License :: OSI Approved :: MIT License',

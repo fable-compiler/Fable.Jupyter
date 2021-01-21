@@ -5,8 +5,8 @@ import os
 import re
 import sys
 import time
-import types
 import traceback
+import types
 from collections import OrderedDict
 
 from metakernel import MetaKernel
@@ -44,7 +44,7 @@ class Fable(MetaKernel):
         "file_extension": ".fs",
     }
     kernel_json = {
-        "argv": [sys.executable, "-m", "fable", "-f", "{connection_file}"],
+        "argv": [sys.executable, "-m", "fable_py", "-f", "{connection_file}"],
         "display_name": "F# (Fable.py)",
         "language": "fsharp",
         "codemirror_mode": "fsharp",
@@ -55,8 +55,8 @@ class Fable(MetaKernel):
     stmt_regexp = r"(?=^\w)"
     # For parsing a declaration statement
     decl_regex = r"^(let)\s(\w*)|^(type)\s(\w*)\s*=|(open)\s(\w*)\s"
-    pyfile = "fable.py"
-    fsfile = "Fable.fs"
+    pyfile = "build/fable.py"
+    fsfile = "build/Fable.fs"
 
     magic_prefixes = dict(magic="%", shell="!", help="?")
     help_suffix = None
@@ -85,7 +85,7 @@ class Fable(MetaKernel):
 
     def do_execute_direct(self, code):
         """Execute the code, and return result."""
-
+        print(sys.version)
         self.result = None
         # try to parse it:
         try:
