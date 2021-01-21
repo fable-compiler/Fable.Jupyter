@@ -45,3 +45,9 @@ jupyter console --kernel fable-python
 ```
 
 You can use Fable Python in Jupyter notebook by selecting the "F# (Fable.py)" kernel.
+
+Note that a Fable compiler (w/Python support) also needs to be wathing in the background i.e:
+
+```bash
+> dotnet watch -p src/Fable.Cli run -- watch --cwd /Users/dbrattli/Developer/GitHub/Fable.Jupyter/src --exclude Fable.Core --forcePkgs --python
+```
