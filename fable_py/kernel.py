@@ -125,6 +125,14 @@ class Fable(MetaKernel):
 
             # Wait for Python file to be compiled
             for i in range(20):
+                # Check for compile errors
+                if os.path.getmtime(self.erfile) > mtime:
+                    with open(self.erfile, "r") as f:
+                        result = f.read()
+                        self.Error(result)
+                        self.result = ""
+                    break
+
                 # Detect if the Python file have changed.
                 if os.path.getmtime(self.pyfile) > mtime:
                     with open(self.pyfile, "r") as f:
@@ -132,15 +140,11 @@ class Fable(MetaKernel):
                         exec_code = compile(pycode, self.pyfile, "exec")
                         self.result = eval(exec_code, self.locals)
                     break
-                # Check for compile errors
-                elif os.path.getmtime(self.erfile) > mtime:
-                    with open(self.erfile, "r") as f:
-                        self.result = f.read()
-                    break
 
                 time.sleep(0.1)
             else:
                 self.result = "timeout: %s : %s" % (mtime, os.path.getmtime(self.pyfile))
+
             # Update program
             for key, stmt in decls:
                 self.program[key] = stmt

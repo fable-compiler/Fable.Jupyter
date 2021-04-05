@@ -53,5 +53,5 @@ jupyter lab
 Note that a Fable compiler (w/Python support) also needs to be wathing in the background i.e:
 
 ```bash
->  dotnet fsi build.fsx jupyter
+>  dotnet watch -p src/Fable.Cli run -- watch --cwd /Users/dbrattli/Developer/GitHub/Fable.Jupyter/src --lang Python --exclude Fable.Core --noCache 2>> /Users/dbrattli/Developer/GitHub/Fable.Jupyter/src/fable.out
 ```
