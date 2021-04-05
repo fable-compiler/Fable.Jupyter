@@ -45,7 +45,7 @@ class Fable(MetaKernel):
     }
     kernel_json = {
         "argv": [sys.executable, "-m", "fable_py", "-f", "{connection_file}"],
-        "display_name": "F# (Fable.py)",
+        "display_name": "F# (Fable Python)",
         "language": "fsharp",
         "codemirror_mode": "fsharp",
         "name": "fable-python",
@@ -53,10 +53,11 @@ class Fable(MetaKernel):
 
     # For splitting code blocks into statements
     stmt_regexp = r"(?=^\w)"
-    # For parsing a declaration statement
-    decl_regex = r"^(let)\s(\w*)|^(type)\s(\w*)\s*=|(open)\s(\w*)\s"
-    pyfile = "build/fable.py"
-    fsfile = "build/Fable.fs"
+    # For parsing a declaration (let, type, open) statement
+    decl_regex = r"^(let)\s(\w*)|^(type)\s(\w*)\s*=|^(open)\s(\w*)\s"
+    pyfile = "src/fable.py"
+    fsfile = "src/Fable.fs"
+    erfile = "src/fable.out"
 
     magic_prefixes = dict(magic="%", shell="!", help="?")
     help_suffix = None
@@ -75,7 +76,7 @@ class Fable(MetaKernel):
         self.module.__dict__.update(self.locals)
         self.locals = self.module.__dict__
 
-        self.program = OrderedDict(dict(module="module Fable.Jupyter"))
+        self.program = dict(module="module Fable.Jupyter")
 
     def set_variable(self, var, value):
         self.env[var] = value
@@ -85,11 +86,12 @@ class Fable(MetaKernel):
 
     def do_execute_direct(self, code):
         """Execute the code, and return result."""
-        print(sys.version)
+        # print(sys.version)
         self.result = None
         # try to parse it:
         try:
-            mtime = os.path.getmtime(self.pyfile)
+            open(self.erfile, "w").close()  # Clear previous errors
+            mtime = os.path.getmtime(self.erfile)
 
             expr = []
             decls = []
@@ -99,9 +101,12 @@ class Fable(MetaKernel):
             for stmt in stmts:
                 match = re.match(self.decl_regex, stmt)
                 if match:
-                    key = match.group(1), match.group(2)
+                    key = f"{match.group(1)} {match.group(2)}"
+                    # print("program: ", self.program)
+                    # print("key: ", key)
                     self.program.pop(key, None)
                     decls.append((key, stmt))
+
                 # We need to print single expressions (except for those printing themselves)
                 elif "printfn" not in stmt:
                     expr.append(stmt)
@@ -112,24 +117,30 @@ class Fable(MetaKernel):
             if len(expr) == 1 and not decls:
                 code = f"""printfn "%A" ({code})"""
 
+            # Write the F# file
             with open(self.fsfile, "w") as f:
                 f.write(os.linesep.join(program))
                 f.write(os.linesep)
                 f.write(code)
 
+            # Wait for Python file to be compiled
             for i in range(20):
-                if mtime != os.path.getmtime(self.pyfile):
+                # Detect if the Python file have changed.
+                if os.path.getmtime(self.pyfile) > mtime:
                     with open(self.pyfile, "r") as f:
                         pycode = f.read()
                         exec_code = compile(pycode, self.pyfile, "exec")
                         self.result = eval(exec_code, self.locals)
                     break
+                # Check for compile errors
+                elif os.path.getmtime(self.erfile) > mtime:
+                    with open(self.erfile, "r") as f:
+                        self.result = f.read()
+                    break
 
                 time.sleep(0.1)
             else:
-                # TODO: show compile errors
                 self.result = "timeout: %s : %s" % (mtime, os.path.getmtime(self.pyfile))
-
             # Update program
             for key, stmt in decls:
                 self.program[key] = stmt
