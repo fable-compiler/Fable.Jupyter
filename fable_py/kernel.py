@@ -1,6 +1,7 @@
 """
 An F# Fable (python) kernel for Jupyter based on MetaKernel.
 """
+import io
 import os
 import re
 import sys
@@ -95,9 +96,13 @@ class Fable(MetaKernel):
         """Execute the code, and return result."""
         # print(sys.version)
         self.result = None
+        ef = None
+
         # try to parse it:
         try:
             open(self.fsfile, "w+").close()  # Clear previous errors
+            ef = open(self.erfile, "r")
+            ef.seek(0, io.SEEK_END)
             mtime = os.path.getmtime(self.fsfile)
 
             expr = []
@@ -105,7 +110,7 @@ class Fable(MetaKernel):
 
             # Remove program declarations redefined in submitted code
             stmts = [stmt for stmt in re.split(self.stmt_regexp, code) if stmt]
-            print("Stmts: ", stmts)
+            # print("Stmts: ", stmts)
             for stmt in stmts:
                 match = re.match(self.decl_regex, stmt)
                 if match:
@@ -137,10 +142,9 @@ class Fable(MetaKernel):
             for i in range(20):
                 # Check for compile errors
                 if os.path.getmtime(self.erfile) > mtime:
-                    with open(self.erfile, "r") as f:
-                        result = f.read()
-                        self.Error(result)
-                        self.result = ""
+                    result = ef.read()
+                    self.Error(result)
+                    self.result = ""
                     break
 
                 # Detect if the Python file have changed.
@@ -170,6 +174,9 @@ class Fable(MetaKernel):
                 }
             )
             return None
+        finally:
+            if ef is not None:
+                ef.close()
         return self.result
 
     def get_completions(self, info):
