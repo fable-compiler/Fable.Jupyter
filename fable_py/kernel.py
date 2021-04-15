@@ -8,7 +8,6 @@ import sys
 import time
 import traceback
 import types
-from collections import OrderedDict
 
 from metakernel import MetaKernel
 
@@ -53,13 +52,13 @@ class Fable(MetaKernel):
     }
 
     # For splitting code blocks into statements
-    stmt_regexp = r"(?=^\w)"
+    stmt_regexp = r"\n(?=[\w\[])"
     # For parsing a declaration (let, type, open) statement
     decl_regex = (
         r"^(let)\s+(?P<let>\w+)"
         r"|^(let)\s+``(?P<ticked>[\w ]+)``"
         r"|^(type)\s+(?P<type>\w*)[\s\(]"
-        r"|^(open)\s+(?P<open>[\w.]+)\s"
+        r"|^(open)\s+(?P<open>[\w.]+)"
         r"|^\[<(?P<attr>.*)>\]"
     )
     # decl_regex = r"^(let)\s(\w*)|^(type)\s(\w*)\s*=|^(open)\s(\w*)\s"
@@ -87,6 +86,7 @@ class Fable(MetaKernel):
         self.program = dict(module="module Fable.Jupyter")
 
     def set_variable(self, var, value):
+        # print("set: ", var, value)
         self.env[var] = value
 
     def get_variable(self, var):
@@ -94,7 +94,7 @@ class Fable(MetaKernel):
 
     def do_execute_direct(self, code):
         """Execute the code, and return result."""
-        # print(sys.version)
+        # print("code: ", code)
         self.result = None
         ef = None
 
@@ -109,8 +109,8 @@ class Fable(MetaKernel):
             decls = []
 
             # Remove program declarations redefined in submitted code
-            stmts = [stmt for stmt in re.split(self.stmt_regexp, code) if stmt]
-            # print("Stmts: ", stmts)
+            stmts = [stmt.lstrip("\n").rstrip() for stmt in re.split(self.stmt_regexp, code, re.M) if stmt]
+            print("Stmts: ", stmts)
             for stmt in stmts:
                 match = re.match(self.decl_regex, stmt)
                 if match:
@@ -118,25 +118,25 @@ class Fable(MetaKernel):
                     key = f"{list(matches.keys())[0]} {list(matches.values())[0]}"
                     # print("program: ", self.program)
                     # print("key: ", key)
-                    self.program.pop(key, None)
+                    self.program[key] = stmt
                     decls.append((key, stmt))
 
                 # We need to print single expressions (except for those printing themselves)
-                elif "printf" not in stmt:
+                else:
                     expr.append(stmt)
 
             # Construct the F# program
             program = [stmt for stmt in self.program.values()]
 
             # Print the result of a single expression.
-            if len(expr) == 1 and not decls:
-                code = f"""printfn "%A" ({code})"""
+            if len(expr) == 1 and "printf" not in expr[0] and not decls:
+                expr = [f"""printfn "%A" ({expr[0]})"""]
 
             # Write the F# program to file
             with open(self.fsfile, "w") as f:
                 f.write("\n".join(program))
                 f.write("\n")
-                f.write(code)
+                f.write("\n".join(expr))
 
             # Wait for Python file to be compiled
             for i in range(20):
@@ -160,8 +160,8 @@ class Fable(MetaKernel):
                 self.result = "timeout: %s : %s" % (mtime, os.path.getmtime(self.pyfile))
 
             # Update program
-            for key, stmt in decls:
-                self.program[key] = stmt
+            # for key, stmt in decls:
+            #    self.program[key] = stmt
 
         except Exception as e:
             self.Error(traceback.format_exc())
