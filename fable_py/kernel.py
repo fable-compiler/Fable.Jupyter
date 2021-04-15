@@ -97,8 +97,8 @@ class Fable(MetaKernel):
         self.result = None
         # try to parse it:
         try:
-            open(self.erfile, "w+").close()  # Clear previous errors
-            mtime = os.path.getmtime(self.erfile)
+            open(self.fsfile, "w+").close()  # Clear previous errors
+            mtime = os.path.getmtime(self.fsfile)
 
             expr = []
             decls = []
@@ -129,8 +129,8 @@ class Fable(MetaKernel):
 
             # Write the F# program to file
             with open(self.fsfile, "w") as f:
-                f.write(os.linesep.join(program))
-                f.write(os.linesep)
+                f.write("\n".join(program))
+                f.write("\n")
                 f.write(code)
 
             # Wait for Python file to be compiled
