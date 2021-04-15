@@ -54,7 +54,14 @@ class Fable(MetaKernel):
     # For splitting code blocks into statements
     stmt_regexp = r"(?=^\w)"
     # For parsing a declaration (let, type, open) statement
-    decl_regex = r"^(let)\s(\w*)|^(type)\s(\w*)\s*=|^(open)\s(\w*)\s"
+    decl_regex = (
+        r"^(let)\s+(?P<let>\w+)"
+        r"|^(let)\s+``(?P<ticked>[\w ]+)``"
+        r"|^(type)\s+(?P<type>\w*)[\s\(]"
+        r"|^(open)\s+(?P<open>[\w.]+)\s"
+        r"|^\[<(?P<attr>.*)>\]"
+    )
+    # decl_regex = r"^(let)\s(\w*)|^(type)\s(\w*)\s*=|^(open)\s(\w*)\s"
     pyfile = "src/fable.py"
     fsfile = "src/Fable.fs"
     erfile = "src/fable.out"
@@ -90,7 +97,7 @@ class Fable(MetaKernel):
         self.result = None
         # try to parse it:
         try:
-            open(self.erfile, "w").close()  # Clear previous errors
+            open(self.erfile, "w+").close()  # Clear previous errors
             mtime = os.path.getmtime(self.erfile)
 
             expr = []
@@ -98,26 +105,29 @@ class Fable(MetaKernel):
 
             # Remove program declarations redefined in submitted code
             stmts = [stmt for stmt in re.split(self.stmt_regexp, code) if stmt]
+            print("Stmts: ", stmts)
             for stmt in stmts:
                 match = re.match(self.decl_regex, stmt)
                 if match:
-                    key = f"{match.group(1)} {match.group(2)}"
+                    matches = dict((key, value) for (key, value) in match.groupdict().items() if value)
+                    key = f"{list(matches.keys())[0]} {list(matches.values())[0]}"
                     # print("program: ", self.program)
                     # print("key: ", key)
                     self.program.pop(key, None)
                     decls.append((key, stmt))
 
                 # We need to print single expressions (except for those printing themselves)
-                elif "printfn" not in stmt:
+                elif "printf" not in stmt:
                     expr.append(stmt)
 
+            # Construct the F# program
             program = [stmt for stmt in self.program.values()]
 
             # Print the result of a single expression.
             if len(expr) == 1 and not decls:
                 code = f"""printfn "%A" ({code})"""
 
-            # Write the F# file
+            # Write the F# program to file
             with open(self.fsfile, "w") as f:
                 f.write(os.linesep.join(program))
                 f.write(os.linesep)
