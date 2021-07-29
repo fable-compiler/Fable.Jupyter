@@ -101,14 +101,14 @@ class Fable(MetaKernel):
         if code == r"%pyfile":
             with open(self.pyfile, "r") as f:
                 pycode = f.read()
-                self.Write(pycode)
-                self.result = ""
+                self.Print(pycode.strip())
+                self.result = None
                 return self.result
         elif code == r"%fsfile":
             with open(self.fsfile, "r") as f:
                 fscode = f.read()
-                self.Write(fscode)
-                self.result = ""
+                self.Print(fscode.strip())
+                self.result = None
                 return self.result
 
         # try to parse it:
@@ -172,7 +172,8 @@ class Fable(MetaKernel):
 
                     time.sleep(0.1)
                 else:
-                    self.result = "timeout: %s : %s" % (mtime, os.path.getmtime(self.pyfile))
+                    self.Error("Timeout! Are you sure Fable is running?")
+                    self.result = ""
 
         except Exception as e:
             self.Error(traceback.format_exc())
