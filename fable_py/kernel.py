@@ -97,6 +97,20 @@ class Fable(MetaKernel):
         # print("code: ", code)
         self.result = None
 
+        # Handle some custom line magics. TODO: write a proper magic extension.
+        if code == r"%pyfile":
+            with open(self.pyfile, "r") as f:
+                pycode = f.read()
+                self.Write(pycode)
+                self.result = ""
+                return self.result
+        elif code == r"%fsfile":
+            with open(self.fsfile, "r") as f:
+                fscode = f.read()
+                self.Write(fscode)
+                self.result = ""
+                return self.result
+
         # try to parse it:
         try:
             with open(self.erfile, "r") as ef:
