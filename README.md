@@ -13,45 +13,24 @@ This work is work-in-progress and related to
 ## Install
 
 ```shell
-pip3 install git+https://github.com/dbrattli/Fable.Jupyter.git
-python3 -m fable_py install
-```
-
-If installing into the system, you may want to:
-
-```shell
-sudo pip3 install git+https://github.com/dbrattli/Fable.Jupyter.git
-sudo python3 -m fable_py install
-```
-
-Or into your personal space:
-
-```shell
-pip3 install git+https://github.com/dbrattli/Fable.Jupyter.git --user
-python3 -m fable_py install --user
-```
-
-Or into a virtualenv, when it is already activated:
-
-```shell
-pip3 install git+https://github.com/dbrattli/Fable.Jupyter.git.git
-python3 -m fable_py install --sys-prefix
+pip install jupyter
+pip install notebook
+pip install metakernel
+pip install git+https://github.com/dbrattli/Fable.Jupyter.git
+python -m fable_py install
 ```
 
 ## Use
 
-```shell
-jupyter console --kernel fable-python
-```
-
 You can use Fable Python in the Jupyter notebook by selecting the "F# (Fable Python)" kernel.
 
 ```shell
-jupyter lab
+jupyter notebook
 ```
 
-Note that a Fable compiler (w/Python support) also needs to be wathing in the background i.e:
+Note that a Fable compiler (w/Python support) also needs to be watching in the background. Checkout Fable with branch
+`beyond` in e.g folder `../Fable` relative to `Fable.Jupyter`. Then you can run Fable in another terminal like this:
 
 ```bash
->  dotnet watch -p src/Fable.Cli run -- watch --cwd /Users/dbrattli/Developer/GitHub/Fable.Jupyter/src --lang Python --exclude Fable.Core --noCache 2>> /Users/dbrattli/Developer/GitHub/Fable.Jupyter/src/fable.out
+>   dotnet run -p ../Fable/src/Fable.Cli -- watch --cwd src/fable.fsproj --lang Python --exclude Fable.Core --noCache 2>> src/fable.out
 ```
