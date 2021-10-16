@@ -148,16 +148,19 @@ class Fable(IPythonKernel):
         # print("code: ", code)
 
         # Handle some custom line magics. TODO: write a proper magic extension.
-        if code == r"%pyfile":
+        if code == r"%python":
             with open(self.pyfile, "r") as f:
                 pycode = f.read()
                 self.Print(pycode.strip())
                 return self.ok()
-        elif code == r"%fsfile":
+        elif code == r"%fsharp  ":
             with open(self.fsfile, "r") as f:
                 fscode = f.read()
                 self.Print(fscode.strip())
                 return self.ok()
+        elif code.startswith(r"%%python"):
+            code = code.replace(r"%%python", "")
+            return await super().do_execute(code, silent, store_history, user_expressions, allow_stdin)
 
         lines = code.splitlines()
         code = "\n".join([line for line in lines if not line.startswith("%")])
@@ -216,11 +219,11 @@ class Fable(IPythonKernel):
                         with open(self.pyfile, "r") as f:
                             pycode = f.read()
                             pycode = magics + "\n" + pycode
-                            self.result = await super().do_execute(
+                            return await super().do_execute(
                                 pycode, silent, store_history, user_expressions, allow_stdin
                             )
-                        break
-
+                    elif magics:
+                        return await super().do_execute(magics, silent, store_history, user_expressions, allow_stdin)
                     time.sleep(0.1)
                 else:
                     self.Error("Timeout! Are you sure Fable is running?")
@@ -240,9 +243,7 @@ class Fable(IPythonKernel):
     def get_completions(self, info):
         # txt = info["help_obj"]
 
-        matches = []  # self.complete(txt)
-
-        return matches
+        return []
 
     @classmethod
     def run_as_main(cls, *args, **kwargs):
