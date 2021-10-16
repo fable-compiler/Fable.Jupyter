@@ -147,21 +147,24 @@ class Fable(IPythonKernel):
         """Execute the code, and return result."""
         # print("code: ", code)
 
-        # Handle some custom line magics. TODO: write a proper magic extension.
+        # Handle some custom line magics.
         if code == r"%python":
             with open(self.pyfile, "r") as f:
                 pycode = f.read()
                 self.Print(pycode.strip())
                 return self.ok()
-        elif code == r"%fsharp  ":
+        elif code == r"%fsharp":
             with open(self.fsfile, "r") as f:
                 fscode = f.read()
                 self.Print(fscode.strip())
                 return self.ok()
-        elif code.startswith(r"%%python"):
+
+        # Send both Python and HTML cell magics straight to the IPythonKernel
+        elif code.startswith(r"%%python") or code.startswith(r"%%html"):
             code = code.replace(r"%%python", "")
             return await super().do_execute(code, silent, store_history, user_expressions, allow_stdin)
 
+        program = self.program.copy()
         lines = code.splitlines()
         code = "\n".join([line for line in lines if not line.startswith("%")])
         magics = "\n".join([line for line in lines if line.startswith("%")])
@@ -186,23 +189,25 @@ class Fable(IPythonKernel):
                         key = f"{list(matches.keys())[0]} {list(matches.values())[0]}"
                         # print("program: ", self.program)
                         # print("key: ", key)
-                        self.program[key] = stmt
+                        program[key] = stmt
                         decls.append((key, stmt))
 
                     # We need to print single expressions (except for those printing themselves)
                     else:
                         expr.append(stmt)
 
-                # Construct the F# program (current and past declarations)
-                program = [stmt for stmt in self.program.values()]
+                # program = [stmt for stmt in program.values()]
 
-                # Print the result of a single expression. # TODO: can we simplify?
+                # Print the result of a single expression.
                 if len(expr) == 1 and "printf" not in expr[0] and not decls:
                     expr = [f"""printfn "%A" ({expr[0]})"""]
+                elif not expr:
+                    # Add an empty do-expression to make sure the program compiles
+                    expr = ["do ()"]
 
-                # Write the F# program to file
+                # Construct the F# program (current and past declarations) and write the program to file.
                 with open(self.fsfile, "w") as f:
-                    f.write("\n".join(program))
+                    f.write("\n".join(program.values()))
                     f.write("\n")
                     f.write("\n".join(expr))
 
@@ -219,6 +224,9 @@ class Fable(IPythonKernel):
                         with open(self.pyfile, "r") as f:
                             pycode = f.read()
                             pycode = magics + "\n" + pycode
+
+                            # Only update program if compiled successfully.
+                            self.program = program
                             return await super().do_execute(
                                 pycode, silent, store_history, user_expressions, allow_stdin
                             )
@@ -253,7 +261,7 @@ class Fable(IPythonKernel):
         FableKernelApp.launch_instance(kernel_class=cls, *args, **kwargs)
 
 
-# Borrwed from Metakernel, https://github.com/Calysto/metakernel
+# Borrowed from Metakernel, https://github.com/Calysto/metakernel
 class FableKernelApp(IPKernelApp):
     """The FableKernel launcher application."""
 
