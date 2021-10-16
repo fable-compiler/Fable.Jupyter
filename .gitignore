@@ -91,3 +91,5 @@ ENV/
 obj/
 
 .ionide/
+
+.idea/

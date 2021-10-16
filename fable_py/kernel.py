@@ -1,48 +1,65 @@
 """
-An F# Fable (python) kernel for Jupyter based on MetaKernel.
+An F# Fable (python) kernel for Jupyter based on IPythonKernel.
 """
 import io
+import json
 import os
+import pkgutil
 import re
+import subprocess
 import sys
+from tempfile import TemporaryDirectory
 import time
 import traceback
-import types
 
-from metakernel import MetaKernel
+from jupyter_core.paths import jupyter_config_path, jupyter_config_dir
+from ipykernel.ipkernel import IPythonKernel
+from ipykernel.kernelapp import IPKernelApp
+from traitlets.config import Application
 
 from .version import __version__
 
 
-def create_fallback_completer(env):
+def format_message(*objects, **kwargs):
     """
-    Return simple completions from env listing,
-    macros and compile table
+    Format a message like print() does.
+    """
+    objects = [str(i) for i in objects]
+    sep = kwargs.get("sep", " ")
+    end = kwargs.get("end", "\n")
+    return sep.join(objects) + end
+
+
+try:
+    from IPython.utils.PyColorize import NeutralColors
+
+    RED = NeutralColors.colors["header"]
+    NORMAL = NeutralColors.colors["normal"]
+except Exception:
+    from IPython.core.excolors import TermColors
+
+    RED = TermColors.Red
+    NORMAL = TermColors.Normal
+
+
+class Fable(IPythonKernel):
+    """
+    A Jupyter kernel for F# based on IPythonKernel.
     """
 
-    def complete(txt):
-        matches = []
-        return matches
-
-    return complete
-
-
-class Fable(MetaKernel):
-    """
-    A Jupyter kernel for F# based on MetaKernel.
-    """
-
-    implementation = "Fable"
+    app_name = "Fable Python"
+    implementation = "Fable Python"
     implementation_version = __version__
     language = "fs"
-    language_version = "0.1"
-    banner = "Fable is a compiler designed to make F# a first-class citizen of the Python ecosystem"
+    language_version = "0.2"
+    banner = "Fable Python is a compiler designed to make F# a first-class citizen of the Python ecosystem."
     language_info = {
         "name": "fsharp",
         "mimetype": "text/x-fsharp",
         "pygments_lexer": "fsharp",
         "file_extension": ".fs",
     }
+
     kernel_json = {
         "argv": [sys.executable, "-m", "fable_py", "-f", "{connection_file}"],
         "display_name": "F# (Fable Python)",
@@ -61,7 +78,6 @@ class Fable(MetaKernel):
         r"|^(open)\s+(?P<open>[\w.]+)"  # e.g: open Fable.Core
         r"|^\[<(?P<attr>.*)>\]"  # e.g: [<Import(..)>]
     )
-    # decl_regex = r"^(let)\s(\w*)|^(type)\s(\w*)\s*=|^(open)\s(\w*)\s"
     pyfile = "src/fable.py"
     fsfile = "src/Fable.fs"
     erfile = "src/fable.out"
@@ -73,17 +89,44 @@ class Fable(MetaKernel):
         """
         Create the Fable (Python) environment
         """
-        self.env = {}
         super(Fable, self).__init__(*args, **kwargs)
 
-        # self.complete = create_completer(self.env)
-        self.locals = {"__name__": "__console__", "__doc__": None}
-        module_name = self.locals.get("__name__", "__console__")
-        self.module = sys.modules.setdefault(module_name, types.ModuleType(module_name))
-        self.module.__dict__.update(self.locals)
-        self.locals = self.module.__dict__
-
         self.program = dict(module="module Fable.Jupyter")
+        self.env = {}
+
+        sys.path.append("src")
+
+    def Print(self, *objects, **kwargs):
+        """Print `objects` to the iopub stream, separated by `sep` and
+        followed by `end`. Items can be strings or `Widget` instances.
+        """
+        message = format_message(*objects, **kwargs)
+
+        stream_content = {"name": "stdout", "text": message}
+        self.log.debug("Print: %s" % message.rstrip())
+        self.send_response(self.iopub_socket, "stream", stream_content)
+
+    def Error(self, *objects, **kwargs):
+        """Print `objects` to stdout, separated by `sep` and followed by
+        `end`. Objects are cast to strings.
+        """
+        message = format_message(*objects, **kwargs)
+        self.log.debug("Error: %s" % message.rstrip())
+        stream_content = {"name": "stderr", "text": RED + message + NORMAL}
+        self.send_response(self.iopub_socket, "stream", stream_content)
+
+    def restart_kernel(self):
+        self.Print("Restarting kernel...")
+
+        # Clear F# file
+        open(self.fsfile, "w").close()
+        self.Print("Done!")
+
+    def do_shutdown(self, restart):
+        if restart:
+            self.restart_kernel()
+
+        return super().do_shutdown(restart)
 
     def set_variable(self, var, value):
         # print("set: ", var, value)
@@ -92,32 +135,40 @@ class Fable(MetaKernel):
     def get_variable(self, var):
         return self.env[var]
 
-    def do_execute_direct(self, code):
+    def ok(self):
+        return {
+            "status": "ok",
+            "execution_count": self.execution_count,
+            "payload": [],
+            "user_expressions": {},
+        }
+
+    async def do_execute(self, code, silent, store_history=True, user_expressions=None, allow_stdin=False):
         """Execute the code, and return result."""
         # print("code: ", code)
-        self.result = None
 
         # Handle some custom line magics. TODO: write a proper magic extension.
         if code == r"%pyfile":
             with open(self.pyfile, "r") as f:
                 pycode = f.read()
                 self.Print(pycode.strip())
-                self.result = None
-                return self.result
+                return self.ok()
         elif code == r"%fsfile":
             with open(self.fsfile, "r") as f:
                 fscode = f.read()
                 self.Print(fscode.strip())
-                self.result = None
-                return self.result
+                return self.ok()
 
-        # try to parse it:
+        lines = code.splitlines()
+        code = "\n".join([line for line in lines if not line.startswith("%")])
+        magics = "\n".join([line for line in lines if line.startswith("%")])
+
         try:
             with open(self.erfile, "r") as ef:
                 ef.seek(0, io.SEEK_END)
 
-                with open(self.fsfile, "w+"):  # Clear previous errors
-                    pass
+                open(self.fsfile, "w+").close()  # Clear previous errors
+
                 mtime = os.path.getmtime(self.fsfile)
 
                 expr = []
@@ -125,7 +176,6 @@ class Fable(MetaKernel):
 
                 # Update program declarations redefined in submitted code
                 stmts = [stmt.lstrip("\n").rstrip() for stmt in re.split(self.stmt_regexp, code, re.M) if stmt]
-                # print("Stmts: ", stmts)
                 for stmt in stmts:
                     match = re.match(self.decl_regex, stmt)
                     if match:
@@ -159,34 +209,33 @@ class Fable(MetaKernel):
                     if os.path.getmtime(self.erfile) > mtime:
                         result = ef.read()
                         self.Error(result)
-                        self.result = ""
-                        break
+                        return self.ok()
 
                     # Detect if the Python file have changed.
                     if os.path.getmtime(self.pyfile) > mtime:
                         with open(self.pyfile, "r") as f:
                             pycode = f.read()
-                            exec_code = compile(pycode, self.pyfile, "exec")
-                            self.result = eval(exec_code, self.locals)
+                            pycode = magics + "\n" + pycode
+                            self.result = await super().do_execute(
+                                pycode, silent, store_history, user_expressions, allow_stdin
+                            )
                         break
 
                     time.sleep(0.1)
                 else:
                     self.Error("Timeout! Are you sure Fable is running?")
-                    self.result = ""
+                    return self.ok()
 
         except Exception as e:
             self.Error(traceback.format_exc())
-            self.kernel_resp.update(
-                {
-                    "status": "error",
-                    "ename": e.__class__.__name__,  # Exception name, as a string
-                    "evalue": e.__class__.__name__,  # Exception value, as a string
-                    "traceback": [],  # traceback frames as strings
-                }
-            )
-            return None
-        return self.result
+            return {
+                "status": "error",
+                "ename": e.__class__.__name__,  # Exception name, as a string
+                "evalue": e.__class__.__name__,  # Exception value, as a string
+                "traceback": [],  # traceback frames as strings
+            }
+
+        return self.ok()
 
     def get_completions(self, info):
         # txt = info["help_obj"]
@@ -194,3 +243,69 @@ class Fable(MetaKernel):
         matches = []  # self.complete(txt)
 
         return matches
+
+    @classmethod
+    def run_as_main(cls, *args, **kwargs):
+        """Launch or install the kernel."""
+
+        kwargs["app_name"] = cls.app_name
+        FableKernelApp.launch_instance(kernel_class=cls, *args, **kwargs)
+
+
+# Borrwed from Metakernel, https://github.com/Calysto/metakernel
+class FableKernelApp(IPKernelApp):
+    """The FableKernel launcher application."""
+
+    config_dir = str()
+
+    def _config_dir_default(self):
+        return jupyter_config_dir()
+
+    @property
+    def config_file_paths(self):
+        path = jupyter_config_path()
+        if self.config_dir not in path:
+            path.insert(0, self.config_dir)
+        path.insert(0, os.getcwd())
+        return path
+
+    @classmethod
+    def launch_instance(cls, *args, **kwargs):
+        cls.name = kwargs.pop("app_name", "metakernel")
+        super(FableKernelApp, cls).launch_instance(*args, **kwargs)
+
+    @property
+    def subcommands(self):
+        # Slightly awkward way to pass the actual kernel class to the install
+        # subcommand.
+
+        class KernelInstallerApp(Application):
+            kernel_class = self.kernel_class
+
+            def initialize(self, argv=None):
+                self.argv = argv
+
+            def start(self):
+                kernel_spec = self.kernel_class().kernel_json
+                with TemporaryDirectory() as td:
+                    dirname = os.path.join(td, kernel_spec["name"])
+                    os.mkdir(dirname)
+                    with open(os.path.join(dirname, "kernel.json"), "w") as f:
+                        json.dump(kernel_spec, f, sort_keys=True)
+                    filenames = ["logo-64x64.png", "logo-32x32.png"]
+                    name = self.kernel_class.__module__
+                    for filename in filenames:
+                        try:
+                            data = pkgutil.get_data(name.split(".")[0], "images/" + filename)
+                        except (OSError, IOError):
+                            data = pkgutil.get_data("metakernel", "images/" + filename)
+                        with open(os.path.join(dirname, filename), "wb") as f:
+                            f.write(data) if data else None
+                    try:
+                        subprocess.check_call(
+                            [sys.executable, "-m", "jupyter", "kernelspec", "install"] + self.argv + [dirname]
+                        )
+                    except subprocess.CalledProcessError as exc:
+                        sys.exit(exc.returncode)
+
+        return {"install": (KernelInstallerApp, "Install this kernel")}
