@@ -13,24 +13,18 @@ This work is work-in-progress and related to
 ## Install
 
 ```shell
-pip install jupyter
-pip install notebook
-pip install git+https://github.com/dbrattli/Fable.Jupyter.git
-python -m fable_py install
+git clone https://github.com/dbrattli/Fable.Jupyter.git
+cd Fable.Jupyter
+
+dotnet tool restore
+dotnet restore
+dotnet run InstallKernel
 ```
 
-## Use
+## Usage
 
 You can use Fable Python in the Jupyter notebook by selecting the "F# (Fable Python)" kernel.
 
 ```shell
-jupyter notebook
-```
-
-Note that a Fable compiler (w/Python support) also needs to be watching in the background. Checkout Fable with branch
-`beyond` in e.g folder `../Fable` relative to `Fable.Jupyter`. Then you can run Fable in another terminal like this:
-
-```bash
-> dotnet tool install fable-py
-> dotnet fable-py watch src/fable.fsproj 2>> src/fable.out
+dotnet run Jupyter
 ```

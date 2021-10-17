@@ -78,9 +78,6 @@ class Fable(IPythonKernel):
         r"|^(open)\s+(?P<open>[\w.]+)"  # e.g: open Fable.Core
         r"|^\[<(?P<attr>.*)>\]"  # e.g: [<Import(..)>]
     )
-    pyfile = "src/fable.py"
-    fsfile = "src/Fable.fs"
-    erfile = "src/fable.out"
 
     magic_prefixes = dict(magic="%", shell="!", help="?")
     help_suffix = None
@@ -91,10 +88,16 @@ class Fable(IPythonKernel):
         """
         super(Fable, self).__init__(*args, **kwargs)
 
+        base = os.getenv("FABLE_JUPYTER_DIR", os.getcwd())
+
+        self.pyfile = f"{base}/src/fable.py"
+        self.fsfile = f"{base}/src/Fable.fs"
+        self.erfile = f"{base}/src/fable.out"
+
         self.program = dict(module="module Fable.Jupyter")
         self.env = {}
 
-        sys.path.append("src")
+        sys.path.append(f"{base}/src")
 
     def Print(self, *objects, **kwargs):
         """Print `objects` to the iopub stream, separated by `sep` and

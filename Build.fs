@@ -1,3 +1,5 @@
+open System.IO
+
 open Fake.Core
 open Fake.IO
 
@@ -11,6 +13,7 @@ let srcPath = Path.getFullName "src"
 Target.create "InstallKernel" (fun _ ->
     run pip "install jupyter notebook" "."
     run python "-m fable_py install" "."
+    run python "setup.py install" "."
 )
 
 Target.create "Clean" (fun _ ->
@@ -18,6 +21,7 @@ Target.create "Clean" (fun _ ->
 )
 
 Target.create "Jupyter" (fun _ ->
+    do Environment.setEnvironVar "FABLE_JUPYTER_DIR" (Directory.GetCurrentDirectory ())
     [ "jupyter", jupyter "notebook" "."
       "fable", dotnetRedirect "fable-py watch fable.fsproj" "src" "src/fable.out" ]
     |> runParallel
