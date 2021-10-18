@@ -12,6 +12,12 @@ from tempfile import TemporaryDirectory
 import time
 import traceback
 
+try:
+    import black
+except ImportError:
+    black = None
+
+from IPython.display import Code
 from jupyter_core.paths import jupyter_config_path, jupyter_config_dir
 from ipykernel.ipkernel import IPythonKernel
 from ipykernel.kernelapp import IPKernelApp
@@ -118,6 +124,11 @@ class Fable(IPythonKernel):
         stream_content = {"name": "stderr", "text": RED + message + NORMAL}
         self.send_response(self.iopub_socket, "stream", stream_content)
 
+    def Code(self, code: Code):
+        """Print HTML formatted code to stdout."""
+        content = {"data": {"text/html": code._repr_html_(), "text/plain": repr(code)}, "metadata": {}}
+        self.send_response(self.iopub_socket, "display_data", content)
+
     def restart_kernel(self):
         self.Print("Restarting kernel...")
 
@@ -154,12 +165,16 @@ class Fable(IPythonKernel):
         if code == r"%python":
             with open(self.pyfile, "r") as f:
                 pycode = f.read()
-                self.Print(pycode.strip())
+                if black:
+                    pycode = black.format_str(pycode, mode=black.FileMode())
+                code = Code(pycode.strip(), language="python")
+                self.Code(code)
                 return self.ok()
         elif code == r"%fsharp":
             with open(self.fsfile, "r") as f:
                 fscode = f.read()
-                self.Print(fscode.strip())
+                code = Code(fscode.strip(), language="fsharp")
+                self.Code(code)
                 return self.ok()
 
         # Send both Python and HTML cell magics straight to the IPythonKernel
