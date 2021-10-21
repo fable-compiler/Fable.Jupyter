@@ -159,7 +159,6 @@ class Fable(IPythonKernel):
 
     async def do_execute(self, code, silent, store_history=True, user_expressions=None, allow_stdin=False):
         """Execute the code, and return result."""
-        # print("code: ", code)
 
         # Handle some custom line magics.
         if code == r"%python":
@@ -177,8 +176,8 @@ class Fable(IPythonKernel):
                 self.Code(code)
                 return self.ok()
 
-        # Send both Python and HTML cell magics straight to the IPythonKernel
-        elif code.startswith(r"%%python") or code.startswith(r"%%html"):
+        # Send cell magics straight to the IPythonKernel
+        elif code.startswith(r"%%"):
             code = code.replace(r"%%python", "")
             return await super().do_execute(code, silent, store_history, user_expressions, allow_stdin)
 
@@ -205,16 +204,12 @@ class Fable(IPythonKernel):
                     if match:
                         matches = dict((key, value) for (key, value) in match.groupdict().items() if value)
                         key = f"{list(matches.keys())[0]} {list(matches.values())[0]}"
-                        # print("program: ", self.program)
-                        # print("key: ", key)
                         program[key] = stmt
                         decls.append((key, stmt))
 
                     # We need to print single expressions (except for those printing themselves)
                     else:
                         expr.append(stmt)
-
-                # program = [stmt for stmt in program.values()]
 
                 # Print the result of a single expression.
                 if len(expr) == 1 and "printf" not in expr[0] and not decls:
@@ -237,13 +232,13 @@ class Fable(IPythonKernel):
                         self.Error(result)
                         return self.ok()
 
-                    # Detect if the Python file have changed.
+                    # Detect if the Python file have changed since last compile.
                     if os.path.getmtime(self.pyfile) > mtime:
                         with open(self.pyfile, "r") as f:
                             pycode = f.read()
                             pycode = magics + "\n" + pycode
 
-                            # Only update program if compiled successfully.
+                            # Only update program if compiled successfully so we don't get stuck with a failing program
                             self.program = program
                             return await super().do_execute(
                                 pycode, silent, store_history, user_expressions, allow_stdin

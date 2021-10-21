@@ -13,7 +13,7 @@ let srcPath = Path.getFullName "src"
 Target.create "InstallKernel" (fun _ ->
     run pip "install jupyter notebook" "."
     run python "-m fable_py install" "."
-    run python "setup.py install" "."
+    run pip "install ." "."
 )
 
 Target.create "Clean" (fun _ ->

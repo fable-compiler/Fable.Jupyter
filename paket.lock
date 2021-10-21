@@ -2,9 +2,9 @@ STORAGE: NONE
 RESTRICTION: == net5.0
 NUGET
   remote: https://api.nuget.org/v3/index.json
-    Fable.Core.Experimental (4.0.0-alpha-002)
+    Fable.Core.Experimental (4.0.0-alpha-003)
       FSharp.Core (>= 4.7.2)
-    Fable.Python (0.9)
+    Fable.Python (0.12)
       Fable.Core.Experimental (>= 4.0.0-alpha-002)
       FSharp.Core (>= 6.0)
     Fake.Core.CommandLineParsing (5.20.4)
