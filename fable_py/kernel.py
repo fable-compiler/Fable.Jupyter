@@ -157,9 +157,7 @@ class Fable(IPythonKernel):
             "user_expressions": {},
         }
 
-    async def do_execute(self, code, silent, store_history=True, user_expressions=None, allow_stdin=False):
-        """Execute the code, and return result."""
-
+    async def do_magic(self, code, silent, store_history=True, user_expressions=None, allow_stdin=False):
         # Handle some custom line magics.
         if code == r"%python":
             with open(self.pyfile, "r") as f:
@@ -176,10 +174,25 @@ class Fable(IPythonKernel):
                 self.Code(code)
                 return self.ok()
 
-        # Send cell magics straight to the IPythonKernel
+        # Reset command
+        elif code.startwith(r"%reset"):
+            self.restart_kernel()
+            return await super().do_execute(code, silent, store_history, user_expressions, allow_stdin)
+
+        # Send all cell magics straight to the IPythonKernel
         elif code.startswith(r"%%"):
+            # Make sure Python runs in the same context as us
             code = code.replace(r"%%python", "")
             return await super().do_execute(code, silent, store_history, user_expressions, allow_stdin)
+
+        return
+
+    async def do_execute(self, code, silent, store_history=True, user_expressions=None, allow_stdin=False):
+        """Execute the code, and return result."""
+
+        ret = await self.do_magic(code, silent, store_history, user_expressions, allow_stdin)
+        if ret:
+            return ret
 
         program = self.program.copy()
         lines = code.splitlines()
