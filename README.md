@@ -20,6 +20,7 @@ git clone https://github.com/dbrattli/Fable.Jupyter.git
 cd Fable.Jupyter
 
 dotnet tool install -g fable-py --version 4.0.0-alpha-010
+python -m fable_py install
 ```
 
 ## Usage

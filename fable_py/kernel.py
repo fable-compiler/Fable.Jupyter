@@ -286,7 +286,7 @@ class Fable(IPythonKernel):
                 f.write("\n".join(expr))
 
             # Wait for Python file to be compiled
-            for i in range(50):
+            for i in range(60):
                 # Check for compile errors
 
                 # Detect if the Python file have changed since last compile.
