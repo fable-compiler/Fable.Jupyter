@@ -4,23 +4,26 @@ An F# Fable (python) kernel for Jupyter based on IPythonKernel.
 import io
 import json
 import os
+import os.path
 import pkgutil
+import queue
 import re
 import subprocess
 import sys
-from tempfile import TemporaryDirectory
+import threading
 import time
 import traceback
+from tempfile import TemporaryDirectory
 
 try:
     import black
 except ImportError:
     black = None
 
-from IPython.display import Code
-from jupyter_core.paths import jupyter_config_path, jupyter_config_dir
 from ipykernel.ipkernel import IPythonKernel
 from ipykernel.kernelapp import IPKernelApp
+from IPython.display import Code
+from jupyter_core.paths import jupyter_config_dir, jupyter_config_path
 from traitlets.config import Application
 
 from .version import __version__
@@ -74,6 +77,25 @@ class Fable(IPythonKernel):
         "name": "fable-python",
     }
 
+    fsproj = """<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net5</TargetFramework>
+    <RollForward>Major</RollForward>
+    <LangVersion>preview</LangVersion>
+    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
+</PropertyGroup>
+<ItemGroup>
+    <Compile Include="Fable.fs" />
+</ItemGroup>
+<ItemGroup>
+    <PackageReference Include="Fable.Core.Experimental" Version="4.0.0-alpha-010" />
+    <PackageReference Include="Fable.Python" Version="0.16.0" />
+</ItemGroup>
+</Project>
+"""
+
     # For splitting code blocks into statements (lines that start with identifiers or [)
     stmt_regexp = r"\n(?=[\w\[])"
     # For parsing a declaration (let, type, open) statement
@@ -94,16 +116,37 @@ class Fable(IPythonKernel):
         """
         super(Fable, self).__init__(*args, **kwargs)
 
-        base = os.getenv("FABLE_JUPYTER_DIR", os.getcwd())
-
-        self.pyfile = f"{base}/src/fable.py"
-        self.fsfile = f"{base}/src/Fable.fs"
-        self.erfile = f"{base}/src/fable.out"
-
         self.program = dict(module="module Fable.Jupyter")
         self.env = {}
 
-        sys.path.append(f"{base}/src")
+        self.tmp_dir = TemporaryDirectory()
+        print(f"Using tmp dir: {self.tmp_dir}")
+
+        self.pyfile = os.path.join(self.tmp_dir.name, "fable.py")
+        self.fsfile = os.path.join(self.tmp_dir.name, "Fable.fs")
+
+        self.fable = None
+
+    def start_fable(self):
+        self.log.info("Starting Fable ...")
+        sys.path.append(self.tmp_dir.name)
+        with open(os.path.join(self.tmp_dir.name, "Jupyter.fsproj"), "w") as fd:
+            fd.write(self.fsproj)
+            fd.flush()
+
+        self.fable = subprocess.Popen(
+            ["dotnet", "fable-py", self.tmp_dir.name, "--watch"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        def error_reader(proc, outq):
+            for line in iter(proc.stderr.readline, b""):
+                outq.put(line.decode("utf-8"))
+
+        self.errors = queue.Queue()
+        self.error_thread = threading.Thread(target=error_reader, args=(self.fable, self.errors))
+        self.error_thread.start()
 
     def Print(self, *objects, **kwargs):
         """Print `objects` to the iopub stream, separated by `sep` and
@@ -137,8 +180,14 @@ class Fable(IPythonKernel):
         self.Print("Done!")
 
     def do_shutdown(self, restart):
+        print("do_shutdown ...")
         if restart:
             self.restart_kernel()
+
+        else:
+            self.tmp_dir.cleanup()
+            if self.fable:
+                self.fable.terminate()
 
         return super().do_shutdown(restart)
 
@@ -157,25 +206,25 @@ class Fable(IPythonKernel):
             "user_expressions": {},
         }
 
-    async def do_magic(self, code, silent, store_history=True, user_expressions=None, allow_stdin=False):
+    async def do_magic(self, code: str, silent, store_history=True, user_expressions=None, allow_stdin=False):
         # Handle some custom line magics.
         if code == r"%python":
             with open(self.pyfile, "r") as f:
                 pycode = f.read()
                 if black:
                     pycode = black.format_str(pycode, mode=black.FileMode())
-                code = Code(pycode.strip(), language="python")
-                self.Code(code)
+                code_ = Code(pycode.strip(), language="python")
+                self.Code(code_)
                 return self.ok()
         elif code == r"%fsharp":
             with open(self.fsfile, "r") as f:
                 fscode = f.read()
-                code = Code(fscode.strip(), language="fsharp")
-                self.Code(code)
+                code_ = Code(fscode.strip(), language="fsharp")
+                self.Code(code_)
                 return self.ok()
 
         # Reset command
-        elif code.startwith(r"%reset"):
+        elif code.startswith(r"%reset"):
             self.restart_kernel()
             return await super().do_execute(code, silent, store_history, user_expressions, allow_stdin)
 
@@ -194,74 +243,72 @@ class Fable(IPythonKernel):
         if ret:
             return ret
 
+        if not self.fable:
+            self.start_fable()
+
         program = self.program.copy()
         lines = code.splitlines()
         code = "\n".join([line for line in lines if not line.startswith("%")])
         magics = "\n".join([line for line in lines if line.startswith("%")])
 
         try:
-            with open(self.erfile, "r") as ef:
-                ef.seek(0, io.SEEK_END)
+            open(self.fsfile, "w+").close()  # Clear previous errors
+            mtime = os.path.getmtime(self.fsfile)
 
-                open(self.fsfile, "w+").close()  # Clear previous errors
+            expr = []
+            decls = []
 
-                mtime = os.path.getmtime(self.fsfile)
+            # Update program declarations redefined in submitted code
+            stmts = [stmt.lstrip("\n").rstrip() for stmt in re.split(self.stmt_regexp, code, re.M) if stmt]
+            for stmt in stmts:
+                match = re.match(self.decl_regex, stmt)
+                if match:
+                    matches = dict((key, value) for (key, value) in match.groupdict().items() if value)
+                    key = f"{list(matches.keys())[0]} {list(matches.values())[0]}"
+                    program[key] = stmt
+                    decls.append((key, stmt))
 
-                expr = []
-                decls = []
-
-                # Update program declarations redefined in submitted code
-                stmts = [stmt.lstrip("\n").rstrip() for stmt in re.split(self.stmt_regexp, code, re.M) if stmt]
-                for stmt in stmts:
-                    match = re.match(self.decl_regex, stmt)
-                    if match:
-                        matches = dict((key, value) for (key, value) in match.groupdict().items() if value)
-                        key = f"{list(matches.keys())[0]} {list(matches.values())[0]}"
-                        program[key] = stmt
-                        decls.append((key, stmt))
-
-                    # We need to print single expressions (except for those printing themselves)
-                    else:
-                        expr.append(stmt)
-
-                # Print the result of a single expression.
-                if len(expr) == 1 and "printf" not in expr[0] and not decls:
-                    expr = [f"""printfn "%A" ({expr[0]})"""]
-                elif not expr:
-                    # Add an empty do-expression to make sure the program compiles
-                    expr = ["do ()"]
-
-                # Construct the F# program (current and past declarations) and write the program to file.
-                with open(self.fsfile, "w") as f:
-                    f.write("\n".join(program.values()))
-                    f.write("\n")
-                    f.write("\n".join(expr))
-
-                # Wait for Python file to be compiled
-                for i in range(20):
-                    # Check for compile errors
-                    if os.path.getmtime(self.erfile) > mtime:
-                        result = ef.read()
-                        self.Error(result)
-                        return self.ok()
-
-                    # Detect if the Python file have changed since last compile.
-                    if os.path.getmtime(self.pyfile) > mtime:
-                        with open(self.pyfile, "r") as f:
-                            pycode = f.read()
-                            pycode = magics + "\n" + pycode
-
-                            # Only update program if compiled successfully so we don't get stuck with a failing program
-                            self.program = program
-                            return await super().do_execute(
-                                pycode, silent, store_history, user_expressions, allow_stdin
-                            )
-                    elif magics:
-                        return await super().do_execute(magics, silent, store_history, user_expressions, allow_stdin)
-                    time.sleep(0.1)
+                # We need to print single expressions (except for those printing themselves)
                 else:
-                    self.Error("Timeout! Are you sure Fable is running?")
+                    expr.append(stmt)
+
+            # Print the result of a single expression.
+            if len(expr) == 1 and "printf" not in expr[0] and not decls:
+                expr = [f"""printfn "%A" ({expr[0]})"""]
+            elif not expr:
+                # Add an empty do-expression to make sure the program compiles
+                expr = ["do ()"]
+
+            # Construct the F# program (current and past declarations) and write the program to file.
+            with open(self.fsfile, "w") as f:
+                f.write("\n".join(program.values()))
+                f.write("\n")
+                f.write("\n".join(expr))
+
+            # Wait for Python file to be compiled
+            for i in range(50):
+                # Check for compile errors
+
+                # Detect if the Python file have changed since last compile.
+                if os.path.exists(self.pyfile) and os.path.getmtime(self.pyfile) > mtime:
+                    with open(self.pyfile, "r") as f:
+                        pycode = f.read()
+                        pycode = magics + "\n" + pycode
+
+                        # Only update program if compiled successfully so we don't get stuck with a failing program
+                        self.program = program
+                        return await super().do_execute(pycode, silent, store_history, user_expressions, allow_stdin)
+                elif magics:
+                    return await super().do_execute(magics, silent, store_history, user_expressions, allow_stdin)
+                elif not self.errors.empty():
+                    size = self.errors.qsize()
+                    lines = [self.errors.get(block=False) for _ in range(size)]
+                    self.Error("\n".join(lines))
                     return self.ok()
+                time.sleep(i / 10.0)
+            else:
+                self.Error("Timeout! Are you sure Fable is running?")
+                return self.ok()
 
         except Exception as e:
             self.Error(traceback.format_exc())

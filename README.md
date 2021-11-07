@@ -2,8 +2,8 @@
 # F# and Fable (Python) support for Jupyter
 
 Fable Python is an F# kernel for Jupyter based on [Fable](https://fable.io) and
-[IPythonKernel](https://github.com/ipython/ipykernel). Fable is a transpiler that converts [F#](https://fsharp.org) to
-Python (and JavaScript).
+[IPythonKernel](https://github.com/ipython/ipykernel). Fable is a transpiler
+that converts [F#](https://fsharp.org) to Python (and JavaScript).
 
 This work is work-in-progress and related to
 
@@ -12,22 +12,23 @@ This work is work-in-progress and related to
 
 ## Install
 
+Make sure you have a recent version of .NET installed on your machine:
+https://dotnet.microsoft.com/download
+
 ```shell
 git clone https://github.com/dbrattli/Fable.Jupyter.git
 cd Fable.Jupyter
 
-dotnet tool restore
-dotnet restore
-dotnet run InstallKernel
+dotnet tool install -g fable-py --version 4.0.0-alpha-010
 ```
 
 ## Usage
 
 You can use Fable Python in the Jupyter notebook by selecting the "F#
-(Fable Python)" kernel. To start the kernel run:
+(Fable Python)" kernel. To start Jupyter run e.g:
 
 ```shell
-dotnet run Jupyter
+jupyter notebook
 ```
 
 The process currently needs to be running while using the notebook.
@@ -51,7 +52,7 @@ You can inspect the maintained F# program by executing `%fsharp` in a cell:
 ## F# Program
 
 The kernel works by maintaining an F# program `Fable.fs` behind the
-scenes. This program lives in the `src` folder.
+scenes. This program lives in a `tmp` folder.
 
 Sometimes the generated F# program might become invalid because of the
 submitted code fragments (this happens with a Python notebook as well).
