@@ -14,7 +14,7 @@ RUN python -m fable_py install --user
 # Install.Net
 RUN wget https://dot.net/v1/dotnet-install.sh
 RUN chmod 777 ./dotnet-install.sh
-RUN ./dotnet-install.sh -c 5.0
+RUN ./dotnet-install.sh -c Current
 ENV PATH="$PATH:${HOME}/.dotnet"
 
 RUN dotnet tool restore

@@ -90,6 +90,7 @@ class Fable(IPythonKernel):
     <Compile Include="Fable.fs" />
 </ItemGroup>
 <ItemGroup>
+    <PackageReference Include="FSharp.Core" Version="6.0.1" />
     <PackageReference Include="Fable.Core.Experimental" Version="4.0.0-alpha-010" />
     <PackageReference Include="Fable.Python" Version="0.16.0" />
 </ItemGroup>
@@ -120,12 +121,11 @@ class Fable(IPythonKernel):
         self.env = {}
 
         self.tmp_dir = TemporaryDirectory()
-        print(f"Using tmp dir: {self.tmp_dir}")
-
         self.pyfile = os.path.join(self.tmp_dir.name, "fable.py")
         self.fsfile = os.path.join(self.tmp_dir.name, "Fable.fs")
 
         self.fable = None
+        self.start_fable()
 
     def start_fable(self):
         self.log.info("Starting Fable ...")
@@ -180,7 +180,6 @@ class Fable(IPythonKernel):
         self.Print("Done!")
 
     def do_shutdown(self, restart):
-        print("do_shutdown ...")
         if restart:
             self.restart_kernel()
 
@@ -242,9 +241,6 @@ class Fable(IPythonKernel):
         ret = await self.do_magic(code, silent, store_history, user_expressions, allow_stdin)
         if ret:
             return ret
-
-        if not self.fable:
-            self.start_fable()
 
         program = self.program.copy()
         lines = code.splitlines()
@@ -368,7 +364,7 @@ class FableKernelApp(IPKernelApp):
                 self.argv = argv
 
             def start(self):
-                kernel_spec = self.kernel_class().kernel_json
+                kernel_spec = self.kernel_class.kernel_json
                 with TemporaryDirectory() as td:
                     dirname = os.path.join(td, kernel_spec["name"])
                     os.mkdir(dirname)
