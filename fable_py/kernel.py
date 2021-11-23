@@ -249,6 +249,8 @@ class Fable(IPythonKernel):
 
         try:
             open(self.fsfile, "w+").close()  # Clear previous errors
+            self.errors.queue.clear()
+
             mtime = os.path.getmtime(self.fsfile)
 
             expr = []
