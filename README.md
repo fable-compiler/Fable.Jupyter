@@ -1,4 +1,3 @@
-
 # F# and Fable (Python) support for Jupyter
 
 Fable Python is an F# kernel for Jupyter based on [Fable](https://fable.io) and
@@ -15,11 +14,19 @@ This work is work-in-progress and related to
 Make sure you have a recent version of .NET installed on your machine:
 https://dotnet.microsoft.com/download
 
-```shell
+```sh
+dotnet tool install -g fable-py --version 4.0.0-alpha-010
+
+pip install fable-py
+python -m fable_py install
+```
+
+To use the very latest changes (for development):
+
+```sh
 git clone https://github.com/dbrattli/Fable.Jupyter.git
 cd Fable.Jupyter
-
-dotnet tool install -g fable-py --version 4.0.0-alpha-010
+python setup.py develop
 python -m fable_py install
 ```
 
@@ -53,14 +60,20 @@ You can inspect the maintained F# program by executing `%fsharp` in a cell:
 ## F# Program
 
 The kernel works by maintaining an F# program `Fable.fs` behind the
-scenes. This program lives in a `tmp` folder.
+scenes. This program lives in a separate `tmp` folder for each instance
+of the kernel.
 
 Sometimes the generated F# program might become invalid because of the
-submitted code fragments (this happens with a Python notebook as well).
+submitted code fragments (this can happen with a Python notebook as well).
 The way to recover is to reset the kernel. That will reset the F#
 program that is running behind the notebook. To reset the kernel select
 on the menu: `Kernel -> Restart` or `Kernel -> Restart & Clear Output`.
 
+or you can use the reset command:
+
+```
+%reset
+```
+
 If you need additional package references you currently need to add them
-manually to the `Fable.fsproj` project file. TODO: handle `#r nuget
-"...` commands from within the notebook.
+manually to the `Fable.fsproj` project file. TODO: handle `#r nuget "...` commands from within the notebook.
