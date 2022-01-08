@@ -14,6 +14,7 @@ import threading
 import time
 import traceback
 from tempfile import TemporaryDirectory
+from typing import Any
 
 try:
     import black
@@ -91,7 +92,7 @@ class Fable(IPythonKernel):
 </ItemGroup>
 <ItemGroup>
     <PackageReference Include="FSharp.Core" Version="6.0.1" />
-    <PackageReference Include="Fable.Core.Experimental" Version="4.0.0-alpha-021" />
+    <PackageReference Include="Fable.Core.Experimental" Version="4.0.0-alpha-025" />
     <PackageReference Include="Fable.Python" Version="0.16.0" />
 </ItemGroup>
 </Project>
@@ -111,7 +112,7 @@ class Fable(IPythonKernel):
     magic_prefixes = dict(magic="%", shell="!", help="?")
     help_suffix = None
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         """
         Create the Fable (Python) environment
         """
@@ -284,7 +285,7 @@ class Fable(IPythonKernel):
                 f.write("\n".join(expr))
 
             # Wait for Python file to be compiled
-            for i in range(60):
+            for i in range(120):
                 # Check for compile errors
 
                 # Detect if the Python file have changed since last compile.
@@ -303,7 +304,7 @@ class Fable(IPythonKernel):
                     lines = [self.errors.get(block=False) for _ in range(size)]
                     self.Error("\n".join(lines))
                     return self.ok()
-                time.sleep(i / 10.0)
+                time.sleep(i / 20.0)
             else:
                 self.Error("Timeout! Are you sure Fable is running?")
                 return self.ok()
