@@ -1,7 +1,6 @@
 """
 An F# Fable (python) kernel for Jupyter based on IPythonKernel.
 """
-import io
 import json
 import os
 import os.path
@@ -124,25 +123,28 @@ class Fable(IPythonKernel):
         self.tmp_dir = TemporaryDirectory()
         self.pyfile = os.path.join(self.tmp_dir.name, "fable.py")
         self.fsfile = os.path.join(self.tmp_dir.name, "Fable.fs")
+        open(self.fsfile, "w+").close()  # Make empty file
 
         self.fable = None
         self.start_fable()
 
     def start_fable(self):
         self.log.info("Starting Fable ...")
+
         sys.path.append(self.tmp_dir.name)
         with open(os.path.join(self.tmp_dir.name, "Jupyter.fsproj"), "w") as fd:
             fd.write(self.fsproj)
             fd.flush()
 
+        env = os.environ.copy()
         self.fable = subprocess.Popen(
-            ["dotnet", "fable-py", self.tmp_dir.name, "--watch"],
-            stdout=subprocess.PIPE,
+            ["fable-py", self.tmp_dir.name, "--watch", "--outDir", self.tmp_dir.name],
             stderr=subprocess.PIPE,
+            env=env,
         )
 
         def error_reader(proc, outq):
-            for line in iter(proc.stderr.readline, b""):
+            for line in iter(proc.strerr.readline, b""):
                 outq.put(line.decode("utf-8"))
 
         self.errors = queue.Queue()
@@ -192,7 +194,6 @@ class Fable(IPythonKernel):
         return super().do_shutdown(restart)
 
     def set_variable(self, var, value):
-        # print("set: ", var, value)
         self.env[var] = value
 
     def get_variable(self, var):
@@ -251,12 +252,10 @@ class Fable(IPythonKernel):
         try:
             open(self.fsfile, "w+").close()  # Clear previous errors
             self.errors.queue.clear()
-
             mtime = os.path.getmtime(self.fsfile)
 
             expr = []
             decls = []
-
             # Update program declarations redefined in submitted code
             stmts = [stmt.lstrip("\n").rstrip() for stmt in re.split(self.stmt_regexp, code, re.M) if stmt]
             for stmt in stmts:
@@ -285,7 +284,8 @@ class Fable(IPythonKernel):
                 f.write("\n".join(expr))
 
             # Wait for Python file to be compiled
-            for i in range(120):
+            for i in range(20):
+                self.log.debug("Looping")
                 # Check for compile errors
 
                 # Detect if the Python file have changed since last compile.
@@ -304,7 +304,7 @@ class Fable(IPythonKernel):
                     lines = [self.errors.get(block=False) for _ in range(size)]
                     self.Error("\n".join(lines))
                     return self.ok()
-                time.sleep(i / 20.0)
+                time.sleep(i / 10.0)
             else:
                 self.Error("Timeout! Are you sure Fable is running?")
                 return self.ok()
