@@ -126,6 +126,8 @@ class Fable(IPythonKernel):
         open(self.fsfile, "w+").close()  # Make empty file
 
         self.fable = None
+        self.error_thread = None
+
         self.start_fable()
 
     def start_fable(self):
@@ -137,6 +139,7 @@ class Fable(IPythonKernel):
             fd.flush()
 
         env = os.environ.copy()
+        env["CI"] = "fable-jupyter"  # Get simpler CI style compile output from Fable (or vscode will choke)
         self.fable = subprocess.Popen(
             ["fable-py", self.tmp_dir.name, "--watch", "--outDir", self.tmp_dir.name],
             stderr=subprocess.PIPE,
