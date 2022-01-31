@@ -13,7 +13,8 @@ import threading
 import time
 import traceback
 from tempfile import TemporaryDirectory
-from typing import Any
+from typing import IO, Any, Dict, List, Optional
+from queue import Queue
 
 try:
     import black
@@ -118,15 +119,18 @@ class Fable(IPythonKernel):
         super(Fable, self).__init__(*args, **kwargs)
 
         self.program = dict(module="module Fable.Jupyter")
-        self.env = {}
+        self.env: Dict[str, str] = {}
 
         self.tmp_dir = TemporaryDirectory()
         self.pyfile = os.path.join(self.tmp_dir.name, "fable.py")
         self.fsfile = os.path.join(self.tmp_dir.name, "Fable.fs")
         open(self.fsfile, "w+").close()  # Make empty file
 
-        self.fable = None
-        self.error_thread = None
+        self.fable: Optional[subprocess.Popen] = None
+        self.error_thread: Optional[threading.Thread] = None
+        self.output_thread: Optional[threading.Thread] = None
+        self.errors: Queue[str] = Queue()
+        self.output: Queue[str] = Queue()
 
         self.start_fable()
 
@@ -143,16 +147,19 @@ class Fable(IPythonKernel):
         self.fable = subprocess.Popen(
             ["fable-py", self.tmp_dir.name, "--watch", "--outDir", self.tmp_dir.name],
             stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
             env=env,
         )
 
-        def error_reader(proc, outq):
-            for line in iter(proc.strerr.readline, b""):
+        def reader(handle: IO[bytes], outq):
+            for line in iter(handle.readline, b""):
                 outq.put(line.decode("utf-8"))
 
-        self.errors = queue.Queue()
-        self.error_thread = threading.Thread(target=error_reader, args=(self.fable, self.errors))
+        self.error_thread = threading.Thread(target=reader, args=(self.fable.stderr, self.errors))
         self.error_thread.start()
+
+        self.output_thread = threading.Thread(target=reader, args=(self.fable.stdout, self.output))
+        self.output_thread.start()
 
     def Print(self, *objects, **kwargs):
         """Print `objects` to the iopub stream, separated by `sep` and
@@ -196,13 +203,13 @@ class Fable(IPythonKernel):
 
         return super().do_shutdown(restart)
 
-    def set_variable(self, var, value):
+    def set_variable(self, var: str, value: str):
         self.env[var] = value
 
     def get_variable(self, var):
         return self.env[var]
 
-    def ok(self):
+    def ok(self) -> Dict[str, Any]:
         return {
             "status": "ok",
             "execution_count": self.execution_count,
@@ -210,7 +217,9 @@ class Fable(IPythonKernel):
             "user_expressions": {},
         }
 
-    async def do_magic(self, code: str, silent, store_history=True, user_expressions=None, allow_stdin=False):
+    async def do_magic(
+        self, code: str, silent: bool, store_history: bool = True, user_expressions=None, allow_stdin: bool = False
+    ):
         # Handle some custom line magics.
         if code == r"%python":
             with open(self.pyfile, "r") as f:
@@ -240,10 +249,12 @@ class Fable(IPythonKernel):
 
         return
 
-    async def do_execute(self, code, silent, store_history=True, user_expressions=None, allow_stdin=False):
+    async def do_execute(
+        self, code: str, silent: bool, store_history: bool = True, user_expressions=None, allow_stdin: bool = False
+    ) -> Dict[str, Any]:
         """Execute the code, and return result."""
 
-        ret = await self.do_magic(code, silent, store_history, user_expressions, allow_stdin)
+        ret: Dict[str, Any] = await self.do_magic(code, silent, store_history, user_expressions, allow_stdin)
         if ret:
             return ret
 
@@ -257,7 +268,7 @@ class Fable(IPythonKernel):
             self.errors.queue.clear()
             mtime = os.path.getmtime(self.fsfile)
 
-            expr = []
+            expr: List[str] = []
             decls = []
             # Update program declarations redefined in submitted code
             stmts = [stmt.lstrip("\n").rstrip() for stmt in re.split(self.stmt_regexp, code, re.M) if stmt]
@@ -289,7 +300,10 @@ class Fable(IPythonKernel):
             # Wait for Python file to be compiled
             for i in range(20):
                 self.log.debug("Looping")
-                # Check for compile errors
+
+                size = self.output.qsize()
+                lines = [self.output.get(block=False) for _ in range(size)]
+                self.log.info("\n".join(lines))
 
                 # Detect if the Python file have changed since last compile.
                 if os.path.exists(self.pyfile) and os.path.getmtime(self.pyfile) > mtime:
@@ -302,6 +316,8 @@ class Fable(IPythonKernel):
                         return await super().do_execute(pycode, silent, store_history, user_expressions, allow_stdin)
                 elif magics:
                     return await super().do_execute(magics, silent, store_history, user_expressions, allow_stdin)
+
+                # Check for compile errors
                 elif not self.errors.empty():
                     size = self.errors.qsize()
                     lines = [self.errors.get(block=False) for _ in range(size)]

@@ -14,10 +14,11 @@ This work is work-in-progress and related to
 Make sure you have a recent version of .NET installed on your machine:
 https://dotnet.microsoft.com/download
 
-You also need to install the `fable-py` .NET tool globally (and make sure it's available in PATH environment)
+You also need to install the latest `fable-py` .NET tool globally (and
+make sure it's available in PATH environment)
 
 ```sh
-dotnet tool install -g fable-py --version 4.0.0-alpha-026
+dotnet tool install -g fable-py --version 4.0.0-alpha-032
 
 pip install fable-py
 python -m fable_py install
