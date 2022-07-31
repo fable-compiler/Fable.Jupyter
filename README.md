@@ -18,7 +18,7 @@ You also need to install the latest `fable-py` .NET tool globally (and
 make sure it's available in PATH environment)
 
 ```sh
-dotnet tool install -g fable-py --version 4.0.0-alpha-032
+dotnet tool install -g fable --version 4.0.0-snake-island-alpha-019
 
 pip install fable-py
 python -m fable_py install

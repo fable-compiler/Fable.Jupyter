@@ -92,8 +92,8 @@ class Fable(IPythonKernel):
 </ItemGroup>
 <ItemGroup>
     <PackageReference Include="FSharp.Core" Version="6.0.1" />
-    <PackageReference Include="Fable.Core.Experimental" Version="4.0.0-alpha-025" />
-    <PackageReference Include="Fable.Python" Version="0.16.0" />
+    <PackageReference Include="Fable.Core" Version="4.0.0-snake-island-alpha-007" />
+    <PackageReference Include="Fable.Python" Version="0.20.0" />
 </ItemGroup>
 </Project>
 """
@@ -145,7 +145,7 @@ class Fable(IPythonKernel):
         env = os.environ.copy()
         env["CI"] = "fable-jupyter"  # Get simpler CI style compile output from Fable (or vscode will choke)
         self.fable = subprocess.Popen(
-            ["fable-py", self.tmp_dir.name, "--watch", "--outDir", self.tmp_dir.name],
+            ["fable", self.tmp_dir.name, "--lang", "py", "--watch", "--outDir", self.tmp_dir.name],
             stderr=subprocess.PIPE,
             stdout=subprocess.PIPE,
             env=env,
