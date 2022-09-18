@@ -91,7 +91,7 @@ ENV/
 obj/
 
 .ionide/
-
+.vscode/
 .idea/
 
 bin/
